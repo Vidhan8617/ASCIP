@@ -1,42 +1,29 @@
-# Autonomous Supply Chain Intelligence Platform (ASCIP)
+# ASCIP
 
-ASCIP is an AI-driven, end-to-end supply chain intelligence platform designed to provide autonomous forecasting, risk intelligence, anomaly detection, inventory optimization, explainable insights (SHAP), and scenario simulation.
+Autonomous Supply Chain Intelligence Platform
 
----
+## Overview
 
-## 🏗️ Project Architecture
-```text
-ASCIP/
-├── api/          # FastAPI backend services and endpoints
-├── dashboard/    # User interface & visualization dashboard
-├── data/         # Raw and processed datasets
-│   ├── raw/
-│   └── processed/
-├── documents/    # Unstructured supply chain documents for RAG
-├── models/       # Trained ML/AI model binaries and artifacts
-├── notebooks/    # Jupyter exploration and experimentation
-├── rag/          # Vector store & RAG LLM decision assistant
-├── src/          # Core reusable modular codebase
-├── tests/        # Unit and integration test suites
-├── .env          # Local environment variables
-├── .gitignore    # Git ignored files and directories
-├── requirements.txt # Python dependencies
-└── README.md
-```
+ASCIP is an AI-powered supply chain intelligence platform designed to forecast demand, detect anomalies, assess supplier risk, support inventory decisions, perform scenario analysis, and provide natural-language decision support.
 
----
+## Current Scope
 
-## 🚀 Getting Started
+- Demand forecasting
+- Anomaly detection
+- Supplier risk prediction
+- Inventory intelligence
+- Explainable AI
+- Scenario simulation
+- RAG-based decision assistant
 
-### Prerequisites
-* Python 3.12.4
-* Virtual environment (`.venv`)
+## Tech Stack
 
-### Installation & Execution
-```bash
-# Activate virtual environment (Windows PowerShell)
-.venv\Scripts\Activate.ps1
-
-# Verify dependencies
-pip install -r requirements.txt
-```
+- Python
+- Pandas
+- NumPy
+- Scikit-learn
+- FastAPI
+- SHAP
+- LangChain
+- FAISS
+- Gemini
