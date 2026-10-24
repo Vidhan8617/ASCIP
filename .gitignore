@@ -12,3 +12,9 @@ models/*.joblib
 
 .vscode/
 .DS_Store
+
+.env
+.venv/
+__pycache__/
+*.py[cod]
+data/processed/rag_index/

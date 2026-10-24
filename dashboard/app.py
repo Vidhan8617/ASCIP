@@ -1,4 +1,3 @@
-
 import requests
 import pandas as pd
 import plotly.express as px
@@ -21,6 +20,12 @@ st.markdown("""
     border-radius: 12px;
     border: 1px solid #28354d;
 }
+.chat-answer {
+    padding: 16px;
+    border-radius: 12px;
+    background: #172033;
+    border: 1px solid #28354d;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -41,6 +46,16 @@ def fetch_data(endpoint):
 
 def fetch_ai_insights(endpoint):
     response = requests.get(f"{API_URL}/{endpoint}", timeout=180)
+    response.raise_for_status()
+    return response.json()
+
+
+def ask_ascip(question, history):
+    response = requests.post(
+        f"{API_URL}/chat",
+        json={"question": question, "history": history},
+        timeout=180
+    )
     response.raise_for_status()
     return response.json()
 
@@ -197,6 +212,7 @@ else:
     st.info("No inventory data available.")
 
 st.divider()
+
 st.subheader("Gemini AI Insights")
 st.caption(
     "Generate explanations and recommended actions on demand. "
@@ -250,6 +266,108 @@ if st.button("📦 Generate Inventory AI Insights"):
                 )
         except requests.RequestException as e:
             st.error(f"Could not generate inventory insights: {e}")
+
+st.divider()
+
+st.subheader("🤖 ASCIP AI Supply Chain Assistant")
+st.caption(
+    "Ask questions about supplier performance, delivery delays, "
+    "product demand, inventory, and stockout risks."
+)
+
+if "ascip_chat_history" not in st.session_state:
+    st.session_state.ascip_chat_history = []
+
+suggestions = [
+    "Which suppliers have delivery or quality problems?",
+    "Which products have the highest stockout risk?",
+    "Explain the major supply chain risks.",
+    "What should we prioritize to improve operations?"
+]
+
+st.markdown("**Try asking:**")
+suggestion_cols = st.columns(2)
+
+for i, suggestion in enumerate(suggestions):
+    with suggestion_cols[i % 2]:
+        if st.button(
+            suggestion,
+            key=f"chat_suggestion_{i}",
+            use_container_width=True
+        ):
+            st.session_state.ascip_pending_question = suggestion
+
+for message in st.session_state.ascip_chat_history:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+        if message["role"] == "assistant" and message.get("sources"):
+            with st.expander("View retrieved data"):
+                st.dataframe(
+                    pd.DataFrame(message["sources"]),
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+pending_question = st.session_state.pop(
+    "ascip_pending_question", None
+)
+
+question = st.chat_input("Ask ASCIP a supply chain question...")
+
+if pending_question or question:
+    current_question = pending_question or question
+
+    st.session_state.ascip_chat_history.append({
+        "role": "user",
+        "content": current_question
+    })
+
+    with st.chat_message("user"):
+        st.markdown(current_question)
+
+    with st.chat_message("assistant"):
+        with st.spinner("Analyzing supply chain data..."):
+            try:
+                previous_messages = st.session_state.ascip_chat_history[:-1][-8:]
+                history = [
+                    {"role": message["role"], "content": message["content"]}
+                    for message in previous_messages
+                ]
+                result = ask_ascip(current_question, history)
+                answer = result.get(
+                    "answer",
+                    "The assistant returned no answer."
+                )
+                sources = result.get("sources", [])
+
+                st.markdown(answer)
+
+                if sources:
+                    with st.expander("View retrieved data"):
+                        st.dataframe(
+                            pd.DataFrame(sources),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+
+                st.session_state.ascip_chat_history.append({
+                    "role": "assistant",
+                    "content": answer,
+                    "sources": sources
+                })
+
+            except requests.HTTPError as e:
+                detail = e.response.text if e.response is not None else str(e)
+                st.error(f"Chat API error: {detail}")
+
+            except requests.RequestException as e:
+                st.error(f"Could not connect to the chat API: {e}")
+
+if st.session_state.ascip_chat_history:
+    if st.button("🗑️ Clear chat history"):
+        st.session_state.ascip_chat_history = []
+        st.rerun()
 
 st.caption(
     "ASCIP MVP | Synthetic supply-chain data | "
