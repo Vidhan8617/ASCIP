@@ -50,6 +50,17 @@ def fetch_ai_insights(endpoint):
     return response.json()
 
 
+@st.cache_data(ttl=300)
+def fetch_forecast(horizon):
+    response = requests.get(
+        f"{API_URL}/forecast/demand",
+        params={"horizon": horizon},
+        timeout=180
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 def ask_ascip(question, history):
     response = requests.post(
         f"{API_URL}/chat",
@@ -210,6 +221,121 @@ if not inventory.empty and "stockout_risk" in inventory.columns:
     )
 else:
     st.info("No inventory data available.")
+
+st.divider()
+
+st.subheader("📈 Demand Forecasting")
+st.caption(
+    "Random Forest demand forecasts by product and warehouse. "
+    "Forecasts are estimates based on historical demand."
+)
+
+forecast_col, button_col = st.columns([1, 2])
+with forecast_col:
+    forecast_horizon = st.selectbox(
+        "Forecast horizon",
+        options=[7, 14, 30, 60],
+        index=1,
+        format_func=lambda value: f"{value} days",
+        key="forecast_horizon"
+    )
+with button_col:
+    st.write("")
+    st.write("")
+    run_forecast = st.button(
+        "📈 Generate Demand Forecast",
+        use_container_width=True
+    )
+
+if run_forecast:
+    with st.spinner("Training the forecasting model and generating predictions..."):
+        try:
+            st.session_state.ascip_forecast_result = fetch_forecast(forecast_horizon)
+            st.session_state.ascip_forecast_horizon = forecast_horizon
+            st.session_state.pop("ascip_forecast_error", None)
+        except requests.RequestException as e:
+            st.session_state.ascip_forecast_error = str(e)
+
+if st.session_state.get("ascip_forecast_error"):
+    st.error(f"Could not generate demand forecast: {st.session_state.ascip_forecast_error}")
+    st.caption("Confirm that FastAPI is running and /forecast/demand is available.")
+
+forecast_result = st.session_state.get("ascip_forecast_result")
+
+if forecast_result:
+    metrics = forecast_result.get("metrics", {})
+    forecast_df = pd.DataFrame(forecast_result.get("forecast", []))
+
+    if metrics:
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("MAE", metrics.get("mae", "N/A"))
+        m2.metric("RMSE", metrics.get("rmse", "N/A"))
+        m3.metric("Training Rows", f"{metrics.get('train_rows', 0):,}")
+        m4.metric("Test Rows", f"{metrics.get('test_rows', 0):,}")
+        if metrics.get("evaluation_start"):
+            st.caption(f"Chronological evaluation starts on {metrics['evaluation_start']}.")
+
+    if not forecast_df.empty:
+        filter_col1, filter_col2 = st.columns(2)
+        with filter_col1:
+            product_options = sorted(forecast_df["product_id"].astype(str).unique())
+            selected_products = st.multiselect(
+                "Filter products",
+                options=product_options,
+                default=product_options[:min(5, len(product_options))],
+                key="forecast_products"
+            )
+        with filter_col2:
+            warehouse_options = sorted(forecast_df["warehouse"].astype(str).unique())
+            selected_warehouses = st.multiselect(
+                "Filter warehouses",
+                options=warehouse_options,
+                default=warehouse_options,
+                key="forecast_warehouses"
+            )
+
+        filtered_forecast = forecast_df[
+            forecast_df["product_id"].astype(str).isin(selected_products)
+            & forecast_df["warehouse"].astype(str).isin(selected_warehouses)
+        ].copy()
+
+        if not filtered_forecast.empty:
+            filtered_forecast["date"] = pd.to_datetime(filtered_forecast["date"])
+            fig = px.line(
+                filtered_forecast,
+                x="date",
+                y="predicted_demand",
+                color="product_id",
+                line_dash="warehouse",
+                markers=True,
+                title="Predicted Demand by Product and Warehouse",
+                labels={
+                    "date": "Forecast Date",
+                    "predicted_demand": "Predicted Demand",
+                    "product_id": "Product",
+                    "warehouse": "Warehouse"
+                }
+            )
+            fig.update_layout(legend_title_text="Product / Warehouse")
+            st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(
+                filtered_forecast.sort_values(["date", "product_id", "warehouse"]),
+                use_container_width=True,
+                hide_index=True
+            )
+            st.download_button(
+                "Download Demand Forecast CSV",
+                data=filtered_forecast.to_csv(index=False),
+                file_name="ascip_demand_forecast.csv",
+                mime="text/csv",
+                key="download_demand_forecast"
+            )
+        else:
+            st.info("No forecasts match the selected product and warehouse filters.")
+    else:
+        st.warning("The API returned no forecast records.")
+else:
+    st.info("Choose a forecast horizon and select Generate Demand Forecast to view predictions.")
 
 st.divider()
 
