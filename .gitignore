@@ -18,3 +18,4 @@ models/*.joblib
 __pycache__/
 *.py[cod]
 data/processed/rag_index/
+requirements_backup.txt
