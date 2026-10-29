@@ -275,6 +275,80 @@ if forecast_result:
         if metrics.get("evaluation_start"):
             st.caption(f"Chronological evaluation starts on {metrics['evaluation_start']}.")
 
+    backtest = forecast_result.get("backtest", {})
+    if backtest:
+        st.divider()
+        st.subheader("Forecast Evaluation")
+        st.caption(
+            "Historical backtest comparison. Scores are pooled across forecast days "
+            "up to each horizon. The current run uses the forecast origins listed below; "
+            "a single origin is preliminary evidence, not proof of general performance."
+        )
+
+        model_labels = {
+            "random_forest": "Random Forest",
+            "previous_day": "Previous-day baseline",
+            "seasonal_7_day": "7-day seasonal baseline"
+        }
+        metric_rows = []
+        origins = set()
+        for horizon_key, comparison in sorted(backtest.items(), key=lambda item: int(item[0])):
+            origins.update(comparison.get("origins", []))
+            for model_key, model_label in model_labels.items():
+                scores = comparison.get(model_key, {})
+                metric_rows.append({
+                    "Horizon (days)": int(horizon_key),
+                    "Model": model_label,
+                    "MAE": scores.get("mae"),
+                    "RMSE": scores.get("rmse"),
+                    "Rows": scores.get("rows", 0)
+                })
+
+        if metric_rows:
+            evaluation_df = pd.DataFrame(metric_rows)
+            st.caption(
+                "Backtest origin(s): " + (", ".join(sorted(origins)) if origins else "not supplied")
+            )
+            st.dataframe(
+                evaluation_df.sort_values(["Horizon (days)", "MAE"]),
+                use_container_width=True,
+                hide_index=True
+            )
+
+            mae_fig = px.bar(
+                evaluation_df,
+                x="Horizon (days)",
+                y="MAE",
+                color="Model",
+                barmode="group",
+                title="Mean Absolute Error by Forecast Horizon",
+                hover_data=["Rows"]
+            )
+            mae_fig.update_layout(legend_title_text="Model")
+            st.plotly_chart(mae_fig, use_container_width=True)
+
+            rmse_fig = px.bar(
+                evaluation_df,
+                x="Horizon (days)",
+                y="RMSE",
+                color="Model",
+                barmode="group",
+                title="Root Mean Squared Error by Forecast Horizon",
+                hover_data=["Rows"]
+            )
+            rmse_fig.update_layout(legend_title_text="Model")
+            st.plotly_chart(rmse_fig, use_container_width=True)
+
+            st.caption(
+                "Lower MAE and RMSE are better. MAE measures typical absolute error; "
+                "RMSE penalizes larger errors more strongly. Compare models at the same horizon."
+            )
+    else:
+        st.info(
+            "No backtest results were returned by the API. The forecast can still be viewed, "
+            "but evaluation charts require the API response to include a 'backtest' section."
+        )
+
     if not forecast_df.empty:
         filter_col1, filter_col2 = st.columns(2)
         with filter_col1:
